@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watt Ledger | Electricity analysis and bill prediction</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2310243B'/><path d='M18 4 8 18h7l-1 10 10-14h-7z' fill='%23F2B233'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#10243B"/><path d="M18 4 8 18h7l-1 10 10-14h-7z" fill="#F2B233"/></svg>
+      <div><strong>Watt Ledger</strong><span>Usage analysis and bill forecasts</span></div></div>
+    <nav aria-label="Main">
+      <a href="#overview" data-nav="overview">Overview</a>
+      <a href="#forecast" data-nav="forecast">Forecast</a>
+      <a href="#readings" data-nav="readings">Meter readings</a>
+      <a href="#appliances" data-nav="appliances">Appliances</a>
+      <a href="#tariff" data-nav="tariff">Tariff and calculator</a>
+    </nav>
+    <p class="side-note">Your data stays in a local SQLite file on this computer.</p>
+  </aside>
+
+  <main id="main">
+    <!-- OVERVIEW -->
+    <section data-page="overview" hidden>
+      <header class="page-head"><h1>Overview</h1><p id="today-label"></p></header>
+      <div id="overview-empty" class="empty" hidden>
+        <h2>No readings yet</h2>
+        <p>Log your daily meter units to see usage trends and a predicted bill. You can also load two years of sample data to explore the app first.</p>
+        <div class="row"><a class="btn" href="#readings">Add a reading</a><button class="btn ghost" data-demo>Load sample data</button></div>
+      </div>
+      <div id="overview-body" hidden>
+        <div class="hero">
+          <div class="hero-main">
+            <p class="hero-label" id="hero-label">Predicted bill</p>
+            <div class="odometer" id="odo" role="img"></div>
+            <p class="hero-sub" id="hero-sub"></p>
+          </div>
+          <div class="hero-side">
+            <p class="hero-label" id="mtd-label">This month so far</p>
+            <p class="mtd"><span id="mtd-kwh"></span> units</p>
+            <div class="bar" aria-hidden="true"><i id="mtd-bar"></i></div>
+            <p class="hero-sub" id="mtd-sub"></p>
+          </div>
+        </div>
+        <dl class="stats" id="stats"></dl>
+        <div class="grid2">
+          <div class="panel"><h2>Monthly usage and forecast</h2><div class="chart"><canvas id="c-monthly"></canvas></div></div>
+          <div class="panel"><h2>Daily usage, last 30 days</h2><div class="chart"><canvas id="c-daily"></canvas></div></div>
+        </div>
+        <div class="panel"><h2>What stands out</h2><ul class="insights" id="insights"></ul></div>
+      </div>
+    </section>
+
+    <!-- FORECAST -->
+    <section data-page="forecast" hidden>
+      <header class="page-head"><h1>Forecast</h1><p>Predicted units and bill for the coming months.</p></header>
+      <div class="panel">
+        <div class="toolbar">
+          <label>Months ahead
+            <select id="f-horizon"><option value="3">3</option><option value="6" selected>6</option><option value="12">12</option></select></label>
+          <label class="grow">If I cut usage by <output id="f-reduce-out">0%</output>
+            <input type="range" id="f-reduce" min="0" max="40" step="5" value="0"></label>
+        </div>
+        <p id="f-msg" class="muted"></p>
+        <div class="chart tall"><canvas id="c-forecast"></canvas></div>
+      </div>
+      <div class="grid2">
+        <div class="panel"><h2>Month by month</h2><div class="table-wrap"><table id="f-table"></table></div></div>
+        <div class="panel"><h2>How reliable is this?</h2><div id="f-model"></div><div id="f-save" class="savings" hidden></div></div>
+      </div>
+    </section>
+
+    <!-- READINGS -->
+    <section data-page="readings" hidden>
+      <header class="page-head"><h1>Meter readings</h1><p>Enter the units used each day. Saving a date that already exists updates it.</p></header>
+      <div class="grid2">
+        <form class="panel form" id="reading-form">
+          <h2>Add a reading</h2>
+          <label>Date<input type="date" name="date" required></label>
+          <label>Units used (kWh)<input type="number" name="kwh" step="0.01" min="0" max="1000" required placeholder="e.g. 12.4"></label>
+          <button class="btn">Save reading</button>
+        </form>
+        <form class="panel form" id="import-form">
+          <h2>Import from CSV</h2>
+          <label>Paste rows as date, units<textarea name="csv" rows="4" placeholder="2026-10-01,11.2&#10;2026-10-02,9.8"></textarea></label>
+          <label>Or choose a file<input type="file" id="csv-file" accept=".csv,text/csv"></label>
+          <div class="row"><button class="btn">Import rows</button><button type="button" class="btn ghost" data-demo>Load sample data</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="between"><h2>Recent readings</h2><button class="btn text danger" id="clear-all">Delete all data</button></div>
+        <div class="table-wrap scroll"><table id="r-table"></table></div>
+      </div>
+    </section>
+
+    <!-- APPLIANCES -->
+    <section data-page="appliances" hidden>
+      <header class="page-head"><h1>Appliances</h1><p>Estimate where your units go. Monthly usage is watts × quantity × hours per day × 30.</p></header>
+      <div class="grid2">
+        <form class="panel form" id="app-form">
+          <h2>Add an appliance</h2>
+          <label>Name<input name="name" required maxlength="60" placeholder="e.g. Air conditioner"></label>
+          <div class="trio">
+            <label>Watts<input type="number" name="watts" min="1" step="any" required></label>
+            <label>Quantity<input type="number" name="qty" min="1" step="1" value="1" required></label>
+            <label>Hours a day<input type="number" name="hours" min="0.1" max="24" step="0.1" required></label>
+          </div>
+          <button class="btn">Add appliance</button>
+        </form>
+        <div class="panel"><h2>Share of estimated usage</h2><div class="chart"><canvas id="c-apps"></canvas></div></div>
+      </div>
+      <div class="panel"><div class="table-wrap"><table id="a-table"></table></div></div>
+    </section>
+
+    <!-- TARIFF -->
+    <section data-page="tariff" hidden>
+      <header class="page-head"><h1>Tariff and calculator</h1><p>The slabs below are sample rates. Replace them with your electricity board's current domestic tariff for accurate bills.</p></header>
+      <div class="grid2">
+        <form class="panel form" id="tariff-form">
+          <h2>Tariff slabs (per month)</h2>
+          <div id="slabs"></div>
+          <button type="button" class="btn ghost" id="add-slab">Add slab</button>
+          <div class="trio">
+            <label>Fixed charge (₹)<input type="number" name="fixed" min="0" step="any" required></label>
+            <label>Tax and duty (%)<input type="number" name="tax" min="0" max="100" step="any" required></label>
+          </div>
+          <button class="btn">Save tariff</button>
+        </form>
+        <form class="panel form" id="calc-form">
+          <h2>Bill calculator</h2>
+          <label>Units for the month (kWh)<input type="number" name="units" min="0" step="any" required placeholder="e.g. 340"></label>
+          <button class="btn">Calculate bill</button>
+          <div id="calc-out"></div>
+        </form>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
